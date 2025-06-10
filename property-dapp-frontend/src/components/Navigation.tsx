@@ -2,71 +2,48 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useAccount, useContractRead, useConnect, useDisconnect } from 'wagmi';
-import { CONTRACT_ADDRESS, CONTRACT_ABI } from '@/lib/web3Config';
-import { Button } from './ui/button';
+import { ConnectButton } from './ConnectButton';
 
 export function Navigation() {
   const pathname = usePathname();
-  const { address, isConnected } = useAccount();
-  const { connect, connectors } = useConnect();
-  const { disconnect } = useDisconnect();
 
-  // Check if current user is notary
-  const { data: notaryAddress } = useContractRead({
-    address: CONTRACT_ADDRESS as `0x${string}`,
-    abi: CONTRACT_ABI,
-    functionName: 'notary',
-  });
-
-  const isNotary = address && notaryAddress && address.toLowerCase() === notaryAddress.toLowerCase();
-  const metaMaskConnector = connectors[0];
+  const isActive = (path: string) => {
+    return pathname === path ? 'bg-primary/10' : '';
+  };
 
   return (
-    <nav className="border-b mb-4">
-      <div className="container mx-auto px-6 py-3">
-        <div className="flex justify-between items-center">
-          <div className="flex space-x-4">
-            <Link
-              href="/properties"
-              className={`text-lg font-medium ${
-                pathname === '/properties' ? 'text-purple-600' : 'text-gray-600 hover:text-purple-600'
-              }`}
+    <nav className="border-b">
+      <div className="container mx-auto px-4">
+        <div className="flex h-16 items-center justify-between">
+          <div className="flex items-center space-x-8">
+            <Link 
+              href="/"
+              className="text-xl font-bold text-primary"
             >
-              Properties
+              Property DApp
             </Link>
-            {isNotary && (
+            <div className="flex items-center space-x-4">
+              <Link
+                href="/properties"
+                className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-primary/5 ${isActive('/properties')}`}
+              >
+                Properties
+              </Link>
+              <Link
+                href="/auctions"
+                className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-primary/5 ${isActive('/auctions')}`}
+              >
+                Auctions
+              </Link>
               <Link
                 href="/notary"
-                className={`text-lg font-medium ${
-                  pathname === '/notary' ? 'text-purple-600' : 'text-gray-600 hover:text-purple-600'
-                }`}
+                className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-primary/5 ${isActive('/notary')}`}
               >
-                Notary Dashboard
+                Notary
               </Link>
-            )}
+            </div>
           </div>
-          <div>
-            {isConnected ? (
-              <div className="flex items-center gap-4">
-                <span className="text-sm text-gray-600">
-                  {address?.slice(0, 6)}...{address?.slice(-4)}
-                </span>
-                <Button
-                  variant="outline"
-                  onClick={() => disconnect()}
-                >
-                  Disconnect
-                </Button>
-              </div>
-            ) : (
-              <Button 
-                onClick={() => connect({ connector: metaMaskConnector })}
-              >
-                Connect Wallet
-              </Button>
-            )}
-          </div>
+          <ConnectButton />
         </div>
       </div>
     </nav>

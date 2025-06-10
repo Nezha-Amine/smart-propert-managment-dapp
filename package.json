@@ -22,7 +22,10 @@
         "@radix-ui/react-toast": "^1.2.14",
         "@truffle/hdwallet-provider": "^2.1.15",
         "class-variance-authority": "^0.7.1",
+        "date-fns": "^4.1.0",
+        "ethers": "^5.8.0",
         "lucide-react": "^0.511.0",
+        "react-countdown": "^2.3.6",
         "truffle": "^5.11.5",
         "web3": "^1.10.0"
     },
