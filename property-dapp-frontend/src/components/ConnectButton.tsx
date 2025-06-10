@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useAccount, useConnect, useDisconnect } from 'wagmi';
 import { Button } from './ui/button';
 
@@ -7,13 +8,28 @@ export function ConnectButton() {
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
+  const [mounted, setMounted] = useState(false);
 
-  const metaMaskConnector = connectors[0];
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <Button variant="outline">
+        Loading...
+      </Button>
+    );
+  }
 
   if (isConnected) {
     return (
-      <div className="flex items-center gap-4">
-        <span className="text-sm text-muted-foreground">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <span style={{ 
+          fontSize: '14px', 
+          color: '#6b7280',
+          fontFamily: 'monospace'
+        }}>
           {address?.slice(0, 6)}...{address?.slice(-4)}
         </span>
         <Button
@@ -25,6 +41,8 @@ export function ConnectButton() {
       </div>
     );
   }
+
+  const metaMaskConnector = connectors[0];
 
   return (
     <Button 

@@ -65,8 +65,13 @@ export default function AuctionsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Loading properties...</div>
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        minHeight: '100vh' 
+      }}>
+        <div style={{ fontSize: '18px' }}>Loading properties...</div>
       </div>
     );
   }
@@ -76,35 +81,46 @@ export default function AuctionsPage() {
   );
 
   return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-8">Start an Auction</h1>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 16px' }}>
+      <h1 style={{ fontSize: '30px', fontWeight: 'bold', marginBottom: '32px', color: '#1f2937' }}>Start an Auction</h1>
 
       {!address ? (
-        <div className="text-center py-8">
-          <p className="text-lg mb-4">Please connect your wallet to view your properties</p>
+        <div style={{ textAlign: 'center', padding: '32px 0' }}>
+          <p style={{ fontSize: '18px', marginBottom: '16px', color: '#6b7280' }}>Please connect your wallet to view your properties</p>
         </div>
       ) : userApprovedProperties.length === 0 ? (
-        <div className="text-center py-8">
-          <p className="text-lg mb-4">You don't have any approved properties to auction</p>
+        <div style={{ textAlign: 'center', padding: '32px 0' }}>
+          <p style={{ fontSize: '18px', marginBottom: '16px', color: '#6b7280' }}>You don't have any approved properties to auction</p>
           <Button
             onClick={() => window.location.href = '/properties'}
-            className="bg-primary text-white"
+            style={{ 
+              backgroundColor: '#3b82f6', 
+              color: 'white',
+              border: 'none',
+              padding: '12px 24px',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}
           >
             Register New Property
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
+          gap: '24px' 
+        }}>
           {userApprovedProperties.map((property) => (
             <Card key={property.id}>
               <CardHeader>
                 <CardTitle>{property.propertyAddress}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <p>Type: {property.propertyType}</p>
                   <p>Size: {property.size} sq ft</p>
-                  <div className="mt-4">
+                  <div style={{ marginTop: '16px' }}>
                     <StartAuction
                       propertyId={property.id}
                       onAuctionStarted={fetchProperties}

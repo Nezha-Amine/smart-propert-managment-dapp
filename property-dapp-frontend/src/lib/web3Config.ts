@@ -196,5 +196,163 @@ export const CONTRACT_ABI = [
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
+  },
+  // LEASE FUNCTIONS
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "_propertyId", "type": "uint256" },
+      { "internalType": "address", "name": "_tenant", "type": "address" },
+      { "internalType": "uint256", "name": "_monthlyRent", "type": "uint256" },
+      { "internalType": "uint256", "name": "_securityDeposit", "type": "uint256" },
+      { "internalType": "uint256", "name": "_startDate", "type": "uint256" },
+      { "internalType": "uint256", "name": "_endDate", "type": "uint256" }
+    ],
+    "name": "createLeaseAgreement",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "_leaseId", "type": "uint256" }],
+    "name": "terminateLease",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "_leaseId", "type": "uint256" },
+      { "internalType": "string", "name": "_transactionType", "type": "string" }
+    ],
+    "name": "makePayment",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "_landlord", "type": "address" }],
+    "name": "getLandlordLeases",
+    "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "_tenant", "type": "address" }],
+    "name": "getTenantLeases",
+    "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "_leaseId", "type": "uint256" }],
+    "name": "getLeaseById",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "uint256", "name": "id", "type": "uint256" },
+          { "internalType": "uint256", "name": "propertyId", "type": "uint256" },
+          { "internalType": "address", "name": "landlord", "type": "address" },
+          { "internalType": "address", "name": "tenant", "type": "address" },
+          { "internalType": "uint256", "name": "monthlyRent", "type": "uint256" },
+          { "internalType": "uint256", "name": "securityDeposit", "type": "uint256" },
+          { "internalType": "uint256", "name": "startDate", "type": "uint256" },
+          { "internalType": "uint256", "name": "endDate", "type": "uint256" },
+          { "internalType": "bool", "name": "isActive", "type": "bool" },
+          { "internalType": "uint256", "name": "createdAt", "type": "uint256" },
+          { "internalType": "uint256", "name": "previousLeaseId", "type": "uint256" },
+          { "internalType": "bool", "name": "isRenewal", "type": "bool" }
+        ],
+        "internalType": "struct PropertyManagement.LeaseAgreement",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "name": "leaseAgreements",
+    "outputs": [
+      { "internalType": "uint256", "name": "id", "type": "uint256" },
+      { "internalType": "uint256", "name": "propertyId", "type": "uint256" },
+      { "internalType": "address", "name": "landlord", "type": "address" },
+      { "internalType": "address", "name": "tenant", "type": "address" },
+      { "internalType": "uint256", "name": "monthlyRent", "type": "uint256" },
+      { "internalType": "uint256", "name": "securityDeposit", "type": "uint256" },
+      { "internalType": "uint256", "name": "startDate", "type": "uint256" },
+      { "internalType": "uint256", "name": "endDate", "type": "uint256" },
+      { "internalType": "bool", "name": "isActive", "type": "bool" },
+      { "internalType": "uint256", "name": "createdAt", "type": "uint256" },
+      { "internalType": "uint256", "name": "previousLeaseId", "type": "uint256" },
+      { "internalType": "bool", "name": "isRenewal", "type": "bool" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // EVENTS
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "propertyId", "type": "uint256" },
+      { "indexed": true, "internalType": "address", "name": "bidder", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256" }
+    ],
+    "name": "BidPlaced",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "propertyId", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "startingPrice", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "endTime", "type": "uint256" }
+    ],
+    "name": "AuctionStarted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "propertyId", "type": "uint256" },
+      { "indexed": true, "internalType": "address", "name": "winner", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "winningBid", "type": "uint256" }
+    ],
+    "name": "AuctionEnded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "leaseId", "type": "uint256" },
+      { "indexed": true, "internalType": "uint256", "name": "propertyId", "type": "uint256" },
+      { "indexed": true, "internalType": "address", "name": "landlord", "type": "address" },
+      { "indexed": false, "internalType": "address", "name": "tenant", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "monthlyRent", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "securityDeposit", "type": "uint256" }
+    ],
+    "name": "LeaseCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "leaseId", "type": "uint256" },
+      { "indexed": true, "internalType": "address", "name": "terminatedBy", "type": "address" }
+    ],
+    "name": "LeaseTerminated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "leaseId", "type": "uint256" },
+      { "indexed": true, "internalType": "address", "name": "tenant", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "month", "type": "uint256" }
+    ],
+    "name": "RentPaid",
+    "type": "event"
   }
 ] as const; 
