@@ -1,13 +1,13 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import { Web3Providers } from '@/components/providers/Web3Providers';
+import { ClientLayout } from '@/components/ClientLayout';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'PropertyDApp',
-  description: 'Decentralized Property Management Application',
+  title: 'Property Management DApp',
+  description: 'A decentralized application for managing property records on the blockchain',
 };
 
 export default function RootLayout({
@@ -16,9 +16,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body className={inter.className}>
-        <Web3Providers>{children}</Web3Providers>
+        <ClientLayout>
+          {children}
+        </ClientLayout>
       </body>
     </html>
   );

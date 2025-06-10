@@ -1,59 +1,73 @@
 'use client';
 
 import Link from 'next/link';
-import { useAccount, useConnect, useDisconnect } from 'wagmi';
+import { usePathname } from 'next/navigation';
+import { useAccount, useContractRead, useConnect, useDisconnect } from 'wagmi';
+import { CONTRACT_ADDRESS, CONTRACT_ABI } from '@/lib/web3Config';
 import { Button } from './ui/button';
 
 export function Navigation() {
+  const pathname = usePathname();
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
 
+  // Check if current user is notary
+  const { data: notaryAddress } = useContractRead({
+    address: CONTRACT_ADDRESS as `0x${string}`,
+    abi: CONTRACT_ABI,
+    functionName: 'notary',
+  });
+
+  const isNotary = address && notaryAddress && address.toLowerCase() === notaryAddress.toLowerCase();
   const metaMaskConnector = connectors[0];
 
   return (
-    <nav className="fixed top-0 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border/40 z-50">
-      <div className="container flex h-16 items-center justify-between">
-        <div className="flex gap-6 md:gap-10">
-          <Link href="/" className="flex items-center space-x-2">
-            <span className="inline-block font-bold neon-text">PropertyDApp</span>
-          </Link>
-          <div className="flex gap-6">
-            <Link href="/dashboard" className="text-sm font-medium hover:text-primary transition-colors">
-              Dashboard
-            </Link>
-            <Link href="/properties" className="text-sm font-medium hover:text-primary transition-colors">
+    <nav className="border-b mb-4">
+      <div className="container mx-auto px-6 py-3">
+        <div className="flex justify-between items-center">
+          <div className="flex space-x-4">
+            <Link
+              href="/properties"
+              className={`text-lg font-medium ${
+                pathname === '/properties' ? 'text-purple-600' : 'text-gray-600 hover:text-purple-600'
+              }`}
+            >
               Properties
             </Link>
-            {address?.toLowerCase() === "YOUR_NOTARY_ADDRESS" && (
-              <Link href="/notary" className="text-sm font-medium hover:text-primary transition-colors">
-                Notary Panel
+            {isNotary && (
+              <Link
+                href="/notary"
+                className={`text-lg font-medium ${
+                  pathname === '/notary' ? 'text-purple-600' : 'text-gray-600 hover:text-purple-600'
+                }`}
+              >
+                Notary Dashboard
               </Link>
             )}
           </div>
-        </div>
-        
-        {isConnected ? (
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">
-              {address?.slice(0, 6)}...{address?.slice(-4)}
-            </span>
-            <Button
-              variant="outline"
-              className="neon-border"
-              onClick={() => disconnect()}
-            >
-              Disconnect
-            </Button>
+          <div>
+            {isConnected ? (
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-gray-600">
+                  {address?.slice(0, 6)}...{address?.slice(-4)}
+                </span>
+                <Button
+                  variant="outline"
+                  onClick={() => disconnect()}
+                >
+                  Disconnect
+                </Button>
+              </div>
+            ) : (
+              <Button 
+                onClick={() => connect({ connector: metaMaskConnector })}
+              >
+                Connect Wallet
+              </Button>
+            )}
           </div>
-        ) : (
-          <Button 
-            className="neon-border bg-primary hover:bg-primary/80"
-            onClick={() => connect({ connector: metaMaskConnector })}
-          >
-            Connect MetaMask
-          </Button>
-        )}
+        </div>
       </div>
     </nav>
   );

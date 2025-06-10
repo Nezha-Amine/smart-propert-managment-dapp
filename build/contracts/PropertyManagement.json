@@ -34595,12 +34595,12 @@
     "1337": {
       "events": {},
       "links": {},
-      "address": "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
-      "transactionHash": "0x694fd9b76628804e28a7f3f425633e5f78cbedba5b1dc450b47f5d0ea0371ee3"
+      "address": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+      "transactionHash": "0x03d1aa5aeb3dc3156ff83355e782df3930ed84165cb53f683bae8c2a5e371ab8"
     }
   },
   "schemaVersion": "3.4.16",
-  "updatedAt": "2025-06-09T13:17:01.031Z",
+  "updatedAt": "2025-06-09T23:53:33.715Z",
   "networkType": "ethereum",
   "devdoc": {
     "kind": "dev",

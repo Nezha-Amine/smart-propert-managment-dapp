@@ -1,5 +1,7 @@
+'use client';
+
 import { Navigation } from '@/components/Navigation';
-import { NotaryDashboard } from '@/components/notary/NotaryDashboard';
+import { NotaryDashboard } from '@/components/properties/NotaryDashboard';
 
 export default function NotaryPage() {
   return (

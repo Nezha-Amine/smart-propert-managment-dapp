@@ -1,59 +1,105 @@
+'use client';
+
 import { useState } from 'react';
-import { useAccount, useContractWrite } from 'wagmi';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import { useAccount, useContractWrite, useWaitForTransaction } from 'wagmi';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '@/lib/web3Config';
-
-const formSchema = z.object({
-  propertyAddress: z.string().min(5, 'Address must be at least 5 characters'),
-  size: z.string().transform((val) => parseInt(val, 10)),
-  propertyType: z.string().min(2, 'Property type must be at least 2 characters'),
-  documentHash: z.string().min(32, 'Document hash must be at least 32 characters'),
-});
+import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
+import { uploadToPinata } from '@/lib/pinataService';
 
 export function RegisterProperty() {
   const { address } = useAccount();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const router = useRouter();
+  const [propertyAddress, setPropertyAddress] = useState('');
+  const [propertySize, setPropertySize] = useState('');
+  const [propertyType, setPropertyType] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      propertyAddress: '',
-      size: '',
-      propertyType: '',
-      documentHash: '',
-    },
-  });
-
-  const { write: registerProperty } = useContractWrite({
-    address: CONTRACT_ADDRESS,
+  const { 
+    write: registerProperty,
+    data: writeData,
+    error: writeError,
+    isLoading: isWritePending,
+  } = useContractWrite({
+    address: CONTRACT_ADDRESS as `0x${string}`,
     abi: CONTRACT_ABI,
     functionName: 'registerProperty',
   });
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    try {
-      setIsSubmitting(true);
-      await registerProperty({
-        args: [
-          values.propertyAddress,
-          values.size,
-          values.propertyType,
-          values.documentHash,
-        ],
-      });
-      form.reset();
-    } catch (error) {
-      console.error('Error registering property:', error);
-    } finally {
-      setIsSubmitting(false);
+  const { 
+    isLoading: isWaitingForTransaction,
+    isSuccess: isTransactionSuccess,
+  } = useWaitForTransaction({
+    hash: writeData?.hash,
+    onSuccess() {
+      toast.success('Property registered successfully!');
+      // Reset form
+      setPropertyAddress('');
+      setPropertySize('');
+      setPropertyType('');
+      setSelectedFile(null);
+      // Refresh the page to update the property list
+      router.refresh();
+    },
+    onError(error) {
+      toast.error('Failed to register property: ' + error.message);
+    },
+  });
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      setSelectedFile(event.target.files[0]);
     }
   };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    
+    if (!selectedFile) {
+      toast.error('Please select a document file');
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      // Replace with your Pinata JWT
+      const pinataJWT = process.env.NEXT_PUBLIC_PINATA_JWT;
+      
+      if (!pinataJWT) {
+        throw new Error('Pinata JWT not configured');
+      }
+
+      // Upload file to IPFS
+      const ipfsHash = await uploadToPinata(selectedFile, pinataJWT);
+
+      // Register property with IPFS hash
+      registerProperty({
+        args: [
+          propertyAddress,
+          BigInt(Math.floor(parseFloat(propertySize))),
+          propertyType,
+          ipfsHash,
+        ],
+      });
+
+    } catch (error) {
+      console.error('Error:', error);
+      toast.error('Failed to upload document or register property');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Show write operation errors
+  if (writeError) {
+    console.error('Write error:', writeError);
+    toast.error('Failed to submit transaction: ' + writeError.message);
+  }
 
   if (!address) {
     return (
@@ -69,81 +115,66 @@ export function RegisterProperty() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Register New Property</CardTitle>
-        <CardDescription>
-          Submit your property details for notary approval
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <FormField
-              control={form.control}
-              name="propertyAddress"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Property Address</FormLabel>
-                  <FormControl>
-                    <Input placeholder="123 Main St, City, State" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="size"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Size (sq ft)</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="1000" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="propertyType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Property Type</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Residential, Commercial, etc." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="documentHash"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Document Hash</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="IPFS hash or document identifier"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <Button
-              type="submit"
-              className="w-full neon-border"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Registering...' : 'Register Property'}
-            </Button>
-          </form>
-        </Form>
-      </CardContent>
+    <Card className="p-6">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="propertyAddress">Property Address</Label>
+          <Input
+            id="propertyAddress"
+            value={propertyAddress}
+            onChange={(e) => setPropertyAddress(e.target.value)}
+            placeholder="Enter property address"
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="propertySize">Size (in square meters)</Label>
+          <Input
+            id="propertySize"
+            type="number"
+            value={propertySize}
+            onChange={(e) => setPropertySize(e.target.value)}
+            placeholder="Enter property size"
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="propertyType">Property Type</Label>
+          <Input
+            id="propertyType"
+            value={propertyType}
+            onChange={(e) => setPropertyType(e.target.value)}
+            placeholder="e.g., Residential, Commercial"
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="document">Ownership Document</Label>
+          <Input
+            id="document"
+            type="file"
+            onChange={handleFileChange}
+            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+            required
+          />
+          <p className="text-sm text-muted-foreground">
+            Upload proof of ownership (PDF, DOC, or image files)
+          </p>
+        </div>
+
+        <Button 
+          type="submit" 
+          disabled={isUploading || isWritePending || isWaitingForTransaction}
+          className="w-full"
+        >
+          {isUploading ? 'Uploading Document...' : 
+           isWritePending || isWaitingForTransaction ? 'Registering Property...' : 
+           'Register Property'}
+        </Button>
+      </form>
     </Card>
   );
 } 
