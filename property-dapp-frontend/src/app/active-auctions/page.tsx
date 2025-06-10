@@ -60,21 +60,27 @@ export default function ActiveAuctionsPage() {
   });
 
   // Prepare end auction transaction
-  const { config: endAuctionConfig } = usePrepareContractWrite({
+  const { config: endAuctionConfig, error: endAuctionPrepareError } = usePrepareContractWrite({
     address: CONTRACT_ADDRESS as `0x${string}`,
     abi: CONTRACT_ABI,
     functionName: 'endAuction',
     args: selectedPropertyId ? [BigInt(selectedPropertyId)] : undefined,
     enabled: !!selectedPropertyId,
+    onError: (error) => {
+      console.error('End auction prepare error:', error);
+    }
   });
 
   // Prepare cancel auction transaction
-  const { config: cancelAuctionConfig } = usePrepareContractWrite({
+  const { config: cancelAuctionConfig, error: cancelAuctionPrepareError } = usePrepareContractWrite({
     address: CONTRACT_ADDRESS as `0x${string}`,
     abi: CONTRACT_ABI,
     functionName: 'cancelAuction',
     args: selectedPropertyId ? [BigInt(selectedPropertyId)] : undefined,
     enabled: !!selectedPropertyId,
+    onError: (error) => {
+      console.error('Cancel auction prepare error:', error);
+    }
   });
 
   // Prepare withdraw bid transaction
@@ -104,7 +110,9 @@ export default function ActiveAuctionsPage() {
 
   // Execute end auction transaction
   const { write: endAuction, isLoading: isEndingAuction } = useContractWrite({
-    ...endAuctionConfig,
+    address: CONTRACT_ADDRESS as `0x${string}`,
+    abi: CONTRACT_ABI,
+    functionName: 'endAuction',
     onSuccess: () => {
       toast.success('🎉 Auction ended successfully! Property transferred to highest bidder.');
       setSelectedPropertyId(null);
@@ -119,7 +127,9 @@ export default function ActiveAuctionsPage() {
 
   // Execute cancel auction transaction
   const { write: cancelAuction, isLoading: isCancellingAuction } = useContractWrite({
-    ...cancelAuctionConfig,
+    address: CONTRACT_ADDRESS as `0x${string}`,
+    abi: CONTRACT_ABI,
+    functionName: 'cancelAuction',
     onSuccess: () => {
       toast.success('🎉 Auction cancelled successfully! All bids have been refunded.');
       setSelectedPropertyId(null);
@@ -432,6 +442,16 @@ export default function ActiveAuctionsPage() {
       return;
     }
 
+    // Debug logging
+    console.log('EndAuction Debug:', {
+      propertyId,
+      selectedPropertyId,
+      endAuctionConfig,
+      endAuctionPrepareError,
+      endAuction: !!endAuction,
+      contractAddress: CONTRACT_ADDRESS
+    });
+
     // Owner can end auction early, others must wait for expiration
     const now = Math.floor(Date.now() / 1000);
     const isEarly = now < property.auctionEndTime;
@@ -464,7 +484,9 @@ export default function ActiveAuctionsPage() {
     
     if (endAuction) {
       try {
-        endAuction();
+        endAuction({
+          args: [BigInt(propertyId)]
+        });
       } catch (error) {
         console.error('Error calling endAuction:', error);
         toast.error('❌ Failed to end auction. Please try again.');
@@ -487,6 +509,16 @@ export default function ActiveAuctionsPage() {
       toast.error('🚫 Only the property owner can cancel the auction');
       return;
     }
+
+    // Debug logging
+    console.log('CancelAuction Debug:', {
+      propertyId,
+      selectedPropertyId,
+      cancelAuctionConfig,
+      cancelAuctionPrepareError,
+      cancelAuction: !!cancelAuction,
+      contractAddress: CONTRACT_ADDRESS
+    });
 
     // Show confirmation for cancellation
     const totalRefund = property.highestBid > 0n ? formatEther(property.highestBid) : '0';
@@ -512,7 +544,9 @@ export default function ActiveAuctionsPage() {
     
     if (cancelAuction) {
       try {
-        cancelAuction();
+        cancelAuction({
+          args: [BigInt(propertyId)]
+        });
       } catch (error) {
         console.error('Error calling cancelAuction:', error);
         toast.error('❌ Failed to cancel auction. Please try again.');
