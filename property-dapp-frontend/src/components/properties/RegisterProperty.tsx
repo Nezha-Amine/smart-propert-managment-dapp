@@ -29,6 +29,15 @@ export function RegisterProperty() {
     address: CONTRACT_ADDRESS as `0x${string}`,
     abi: CONTRACT_ABI,
     functionName: 'registerProperty',
+    onError(error) {
+      console.error('Contract write error:', error);
+      const errorMessage = error.message || 'Unknown transaction error';
+      toast.error('Transaction failed: ' + errorMessage);
+    },
+    onSuccess(data) {
+      console.log('Transaction submitted successfully:', data);
+      toast.success('Transaction submitted! Waiting for confirmation...');
+    }
   });
 
   const { 
@@ -36,7 +45,8 @@ export function RegisterProperty() {
     isSuccess: isTransactionSuccess,
   } = useWaitForTransaction({
     hash: writeData?.hash,
-    onSuccess() {
+    onSuccess(data) {
+      console.log('Transaction confirmed:', data);
       toast.success('Property registered successfully!');
       // Reset form
       setPropertyAddress('');
@@ -47,7 +57,8 @@ export function RegisterProperty() {
       router.refresh();
     },
     onError(error) {
-      toast.error('Failed to register property: ' + error.message);
+      console.error('Transaction confirmation error:', error);
+      toast.error('Transaction failed: ' + error.message);
     },
   });
 
@@ -60,45 +71,117 @@ export function RegisterProperty() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     
+    // Comprehensive input validation
+    if (!address) {
+      toast.error('Please connect your wallet first');
+      return;
+    }
+    
+    if (!propertyAddress.trim()) {
+      toast.error('Please enter a property address');
+      return;
+    }
+    
+    if (!propertySize || isNaN(parseFloat(propertySize)) || parseFloat(propertySize) <= 0) {
+      toast.error('Please enter a valid property size (positive number)');
+      return;
+    }
+    
+    if (!propertyType.trim()) {
+      toast.error('Please enter a property type');
+      return;
+    }
+    
     if (!selectedFile) {
       toast.error('Please select a document file');
+      return;
+    }
+    
+    // Check file size (10MB limit)
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      toast.error('File size must be less than 10MB');
       return;
     }
 
     try {
       setIsUploading(true);
-      // Replace with your Pinata JWT
-      const pinataJWT = process.env.NEXT_PUBLIC_PINATA_JWT;
       
+      // Check Pinata JWT configuration
+      const pinataJWT = process.env.NEXT_PUBLIC_PINATA_JWT;
       if (!pinataJWT) {
-        throw new Error('Pinata JWT not configured');
+        throw new Error('Pinata JWT not configured in environment variables');
       }
 
+      console.log('Starting file upload to IPFS...', {
+        fileName: selectedFile.name,
+        fileSize: selectedFile.size,
+        fileType: selectedFile.type
+      });
+      
       // Upload file to IPFS
       const ipfsHash = await uploadToPinata(selectedFile, pinataJWT);
-
-      // Register property with IPFS hash
+      console.log('File successfully uploaded to IPFS:', ipfsHash);
+      
+      // Prepare transaction arguments with proper typing
+      const transactionArgs: [string, bigint, string, string] = [
+        propertyAddress.trim(),
+        BigInt(Math.floor(parseFloat(propertySize))),
+        propertyType.trim(),
+        ipfsHash,
+      ];
+      
+      console.log('Preparing blockchain transaction with args:', {
+        propertyAddress: propertyAddress.trim(),
+        size: Math.floor(parseFloat(propertySize)),
+        propertyType: propertyType.trim(),
+        documentHash: ipfsHash,
+        contractAddress: CONTRACT_ADDRESS,
+        userAddress: address
+      });
+      
+      // Validate that registerProperty function exists
+      if (!registerProperty) {
+        throw new Error('Contract function not available. Please refresh the page and try again.');
+      }
+      
+      // Submit transaction to blockchain
+      console.log('Submitting transaction to blockchain...');
       registerProperty({
-        args: [
-          propertyAddress,
-          BigInt(Math.floor(parseFloat(propertySize))),
-          propertyType,
-          ipfsHash,
-        ],
+        args: transactionArgs,
       });
 
-    } catch (error) {
-      console.error('Error:', error);
-      toast.error('Failed to upload document or register property');
+    } catch (error: any) {
+      console.error('Error in property registration:', error);
+      
+      // Provide specific error messages based on error type
+      let errorMessage = 'An unexpected error occurred';
+      
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.code === 4001) {
+        errorMessage = 'Transaction was rejected by user';
+      } else if (error.code === -32603) {
+        errorMessage = 'Internal blockchain error. Please try again.';
+      } else if (error.toString().includes('insufficient funds')) {
+        errorMessage = 'Insufficient funds for transaction';
+      } else if (error.toString().includes('gas')) {
+        errorMessage = 'Gas estimation failed. Please try again with more gas.';
+      }
+      
+      toast.error('Registration failed: ' + errorMessage);
     } finally {
       setIsUploading(false);
     }
   };
 
-  // Show write operation errors
+  // Log any write errors
   if (writeError) {
-    console.error('Write error:', writeError);
-    toast.error('Failed to submit transaction: ' + writeError.message);
+    console.error('Write error details:', {
+      error: writeError,
+      message: writeError.message,
+      cause: writeError.cause,
+      stack: writeError.stack
+    });
   }
 
   if (!address) {
@@ -157,12 +240,12 @@ export function RegisterProperty() {
             >
               📍 Property Address
             </Label>
-            <Input
-              id="propertyAddress"
-              value={propertyAddress}
-              onChange={(e) => setPropertyAddress(e.target.value)}
-              placeholder="Enter property address"
-              required
+          <Input
+            id="propertyAddress"
+            value={propertyAddress}
+            onChange={(e) => setPropertyAddress(e.target.value)}
+            placeholder="Enter property address"
+            required
               style={{ 
                 fontSize: '16px',
                 padding: '12px 16px',
@@ -178,8 +261,8 @@ export function RegisterProperty() {
                 e.target.style.borderColor = '#e5e7eb';
                 e.target.style.boxShadow = 'none';
               }}
-            />
-          </div>
+          />
+        </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <Label 
@@ -195,13 +278,13 @@ export function RegisterProperty() {
             >
               📐 Size (in square meters)
             </Label>
-            <Input
-              id="propertySize"
-              type="number"
-              value={propertySize}
-              onChange={(e) => setPropertySize(e.target.value)}
-              placeholder="Enter property size"
-              required
+          <Input
+            id="propertySize"
+            type="number"
+            value={propertySize}
+            onChange={(e) => setPropertySize(e.target.value)}
+            placeholder="Enter property size"
+            required
               style={{ 
                 fontSize: '16px',
                 padding: '12px 16px',
@@ -217,8 +300,8 @@ export function RegisterProperty() {
                 e.target.style.borderColor = '#e5e7eb';
                 e.target.style.boxShadow = 'none';
               }}
-            />
-          </div>
+          />
+        </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <Label 
@@ -234,12 +317,12 @@ export function RegisterProperty() {
             >
               🏢 Property Type
             </Label>
-            <Input
-              id="propertyType"
-              value={propertyType}
-              onChange={(e) => setPropertyType(e.target.value)}
-              placeholder="e.g., Residential, Commercial"
-              required
+          <Input
+            id="propertyType"
+            value={propertyType}
+            onChange={(e) => setPropertyType(e.target.value)}
+            placeholder="e.g., Residential, Commercial"
+            required
               style={{ 
                 fontSize: '16px',
                 padding: '12px 16px',
@@ -255,8 +338,8 @@ export function RegisterProperty() {
                 e.target.style.borderColor = '#e5e7eb';
                 e.target.style.boxShadow = 'none';
               }}
-            />
-          </div>
+          />
+        </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <Label 
@@ -281,12 +364,12 @@ export function RegisterProperty() {
               transition: 'all 0.3s ease',
               backgroundColor: '#f9fafb'
             }}>
-              <Input
-                id="document"
-                type="file"
-                onChange={handleFileChange}
-                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                required
+          <Input
+            id="document"
+            type="file"
+            onChange={handleFileChange}
+            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+            required
                 style={{ 
                   position: 'absolute',
                   inset: '0',
@@ -301,14 +384,14 @@ export function RegisterProperty() {
                 </p>
                 <p style={{ fontSize: '12px', color: '#9ca3af' }}>
                   PDF, DOC, or image files (Max 10MB)
-                </p>
+          </p>
               </div>
             </div>
-          </div>
+        </div>
 
-          <Button 
-            type="submit" 
-            disabled={isUploading || isWritePending || isWaitingForTransaction}
+        <Button 
+          type="submit" 
+          disabled={isUploading || isWritePending || isWaitingForTransaction}
             style={{ 
               width: '100%',
               background: isUploading || isWritePending || isWaitingForTransaction 
@@ -335,12 +418,12 @@ export function RegisterProperty() {
               e.currentTarget.style.transform = 'translateY(0)';
               e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
             }}
-          >
+        >
             {isUploading ? '📤 Uploading Document...' : 
              isWritePending || isWaitingForTransaction ? '⏳ Registering Property...' : 
              '🚀 Register Property'}
-          </Button>
-        </form>
+        </Button>
+      </form>
       </CardContent>
     </Card>
   );

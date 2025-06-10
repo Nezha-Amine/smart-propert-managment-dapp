@@ -12,7 +12,7 @@
         "migrate": "truffle migrate",
         "ganache": "ganache --wallet.mnemonic \"egg wish punch filter tail control over stamp fruit setup dolphin gift\" --chain.networkId 1337 --chain.chainId 1337",
         "migrate:reset": "truffle migrate --reset",
-        "dev": "cd frontend && npm run dev"
+        "dev": "cd property-dapp-frontend && npm run dev"
     },
     "author": "",
     "license": "MIT",

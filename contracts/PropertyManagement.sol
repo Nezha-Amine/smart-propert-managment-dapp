@@ -111,6 +111,7 @@ contract PropertyManagement is ReentrancyGuard {
     event BidPlaced(uint256 indexed propertyId, address indexed bidder, uint256 amount);
     event AuctionEnded(uint256 indexed propertyId, address winner, uint256 amount);
     event BidWithdrawn(uint256 indexed propertyId, address indexed bidder, uint256 amount);
+    event AuctionCancelled(uint256 indexed propertyId, uint256 refundedAmount);
     event PropertySubmitted(uint256 propertyId, address owner, string propertyAddress);
     event PropertyApproved(uint256 propertyId, address notary);
     event PropertyRejected(uint256 propertyId, address notary);
@@ -643,15 +644,19 @@ contract PropertyManagement is ReentrancyGuard {
         emit BidWithdrawn(_propertyId, msg.sender, amount);
     }
 
-    // Function to end an auction
+    // Function to end an auction (can be ended early by owner)
     function endAuction(uint256 _propertyId) external nonReentrant {
         Property storage property = properties[_propertyId];
         Auction storage auction = auctions[_propertyId];
         
         require(property.onAuction, "No active auction");
         require(!property.auctionEnded, "Auction already ended");
-        require(block.timestamp >= property.auctionEndTime, "Auction still in progress");
-        require(msg.sender == property.owner || msg.sender == property.highestBidder, "Only owner or highest bidder can end auction");
+        
+        // Allow owner to end early, others must wait for auction end time
+        if (msg.sender != property.owner) {
+            require(block.timestamp >= property.auctionEndTime, "Auction still in progress");
+            require(msg.sender == property.highestBidder, "Only owner or highest bidder can end auction");
+        }
 
         property.auctionEnded = true;
         property.onAuction = false;
@@ -683,6 +688,46 @@ contract PropertyManagement is ReentrancyGuard {
         } else {
             emit AuctionEnded(_propertyId, address(0), 0);
         }
+    }
+
+    // Function to cancel an auction (only owner, refunds all bidders)
+    function cancelAuction(uint256 _propertyId) external nonReentrant {
+        Property storage property = properties[_propertyId];
+        Auction storage auction = auctions[_propertyId];
+        
+        require(property.onAuction, "No active auction");
+        require(!property.auctionEnded, "Auction already ended");
+        require(msg.sender == property.owner, "Only property owner can cancel auction");
+        
+        // Mark auction as ended/cancelled
+        property.auctionEnded = true;
+        property.onAuction = false;
+        auction.ended = true;
+        
+        uint256 totalRefunded = 0;
+        
+        // Refund the highest bidder if there is one
+        if (property.highestBidder != address(0)) {
+            uint256 highestBidAmount = property.highestBid;
+            address highestBidderAddress = property.highestBidder;
+            
+            // Clear the highest bid first to prevent reentrancy
+            property.highestBidder = address(0);
+            property.highestBid = 0;
+            auction.highestBidder = address(0);
+            auction.highestBid = 0;
+            
+            // Refund the highest bidder
+            (bool success, ) = payable(highestBidderAddress).call{value: highestBidAmount}("");
+            require(success, "Failed to refund highest bidder");
+            
+            totalRefunded += highestBidAmount;
+        }
+        
+        // Reset property auction state
+        property.auctionEndTime = 0;
+        
+        emit AuctionCancelled(_propertyId, totalRefunded);
     }
 
     // View function to get auction details

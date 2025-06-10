@@ -52,13 +52,16 @@ export function PropertyList() {
   });
 
   // Get property IDs owned by the current user
-  const { data: userPropertyIds } = useContractRead({
+  const { data: userPropertyIds, error: ownerPropertiesError } = useContractRead({
     address: CONTRACT_ADDRESS as `0x${string}`,
     abi: CONTRACT_ABI,
     functionName: 'getOwnerProperties',
     args: [address as `0x${string}`],
     enabled: !!address,
     watch: true,
+    onError: (error) => {
+      console.warn('getOwnerProperties failed, user may have no properties:', error);
+    },
   });
 
   // Check if user is notary
@@ -76,7 +79,22 @@ export function PropertyList() {
 
   // Process properties when they change
   useEffect(() => {
-    if (!address || !userPropertyIds) {
+    if (!address) {
+      setLoading(false);
+      return;
+    }
+
+    // If there's an error with getOwnerProperties, assume user has no properties
+    if (ownerPropertiesError) {
+      console.log('User has no properties or getOwnerProperties failed');
+      setProperties([]);
+      setLoading(false);
+      return;
+    }
+
+    // If userPropertyIds is still loading or empty
+    if (!userPropertyIds || (Array.isArray(userPropertyIds) && userPropertyIds.length === 0)) {
+      setProperties([]);
       setLoading(false);
       return;
     }

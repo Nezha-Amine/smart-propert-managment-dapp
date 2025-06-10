@@ -39,12 +39,15 @@ export default function CreateLease() {
   const [approvedProperties, setApprovedProperties] = useState<Property[]>([]);
 
   // Fetch user's properties
-  const { data: ownerProperties } = useContractRead({
+  const { data: ownerProperties, error: ownerPropertiesError } = useContractRead({
     address: CONTRACT_ADDRESS as `0x${string}`,
     abi: CONTRACT_ABI,
     functionName: 'getOwnerProperties',
     args: [address as `0x${string}`],
     enabled: !!address,
+    onError: (error) => {
+      console.warn('getOwnerProperties failed, user may have no properties:', error);
+    },
   });
 
   // Prepare the create lease transaction
@@ -93,7 +96,15 @@ export default function CreateLease() {
 
   // Fetch property details for user's properties
   useEffect(() => {
-    if (!ownerProperties || ownerProperties.length === 0) {
+    // If there's an error with getOwnerProperties, assume user has no properties
+    if (ownerPropertiesError) {
+      console.log('User has no properties or getOwnerProperties failed');
+      setUserProperties([]);
+      setApprovedProperties([]);
+      return;
+    }
+
+    if (!ownerProperties || (Array.isArray(ownerProperties) && ownerProperties.length === 0)) {
       setUserProperties([]);
       setApprovedProperties([]);
       return;
