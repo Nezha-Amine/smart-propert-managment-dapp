@@ -14,6 +14,8 @@ interface Property {
   propertyType: string;
   isActive: boolean;
   isApproved: boolean;
+  onAuction: boolean;
+  isForSale: boolean;
 }
 
 interface LeaseFormData {
@@ -131,7 +133,9 @@ export default function CreateLease() {
                 size: Number(result[3]),
                 propertyType: result[4] as string,
                 isActive: result[5] as boolean,
-                isApproved: result[14] as boolean
+                isApproved: result[14] as boolean,
+                onAuction: result[9] as boolean,
+                isForSale: result[7] as boolean
               };
               
               properties.push(property);
@@ -142,7 +146,12 @@ export default function CreateLease() {
         }
         
         setUserProperties(properties);
-        setApprovedProperties(properties.filter(p => p.isApproved && p.isActive));
+        setApprovedProperties(properties.filter(p => 
+          p.isApproved && 
+          p.isActive && 
+          !p.onAuction && 
+          !p.isForSale
+        ));
       } catch (error) {
         console.error('Error fetching properties:', error);
         toast.error('❌ Failed to fetch properties');
@@ -197,12 +206,38 @@ export default function CreateLease() {
       return;
     }
 
+    // Additional validation: check if selected property is available for lease
+    const selectedProperty = userProperties.find(p => p.id === Number(formData.propertyId));
+    if (selectedProperty) {
+      if (selectedProperty.onAuction) {
+        toast.error('🚨 Cannot create lease: Property is currently on auction');
+        return;
+      }
+      if (selectedProperty.isForSale) {
+        toast.error('💰 Cannot create lease: Property is currently for sale');
+        return;
+      }
+      if (!selectedProperty.isApproved) {
+        toast.error('⏳ Cannot create lease: Property is not yet approved');
+        return;
+      }
+    }
+
     // Execute the blockchain transaction
     try {
       createLeaseAgreement?.();
     } catch (error) {
       console.error('Error creating lease:', error);
-      toast.error('❌ Failed to create lease. Please try again.');
+      
+      // Check for specific error messages from the smart contract
+      const errorMessage = error?.message || '';
+      if (errorMessage.includes('Property is currently on auction')) {
+        toast.error('🚨 Cannot create lease: Property is currently on auction');
+      } else if (errorMessage.includes('Property is currently for sale')) {
+        toast.error('💰 Cannot create lease: Property is currently for sale');
+      } else {
+        toast.error('❌ Failed to create lease. Please try again.');
+      }
     }
   };
 
@@ -226,6 +261,12 @@ export default function CreateLease() {
   }
 
   if (approvedProperties.length === 0) {
+    // Check if user has properties but they're not available for lease
+    const hasProperties = userProperties.length > 0;
+    const propertiesOnAuction = userProperties.filter(p => p.onAuction).length;
+    const propertiesForSale = userProperties.filter(p => p.isForSale).length;
+    const unapprovedProperties = userProperties.filter(p => !p.isApproved).length;
+    
     return (
       <div style={{
         background: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
@@ -236,10 +277,29 @@ export default function CreateLease() {
         boxShadow: '0 20px 40px rgba(252, 182, 159, 0.3)'
       }}>
         <div style={{ fontSize: '60px', marginBottom: '20px' }}>🏠</div>
-        <h3 style={{ fontSize: '24px', marginBottom: '16px', fontWeight: '600' }}>No Approved Properties</h3>
-        <p style={{ fontSize: '16px', opacity: '0.8' }}>
-          You need to have approved properties before creating leases
-        </p>
+        <h3 style={{ fontSize: '24px', marginBottom: '16px', fontWeight: '600' }}>
+          {hasProperties ? 'No Properties Available for Lease' : 'No Approved Properties'}
+        </h3>
+        <div style={{ fontSize: '16px', opacity: '0.8', textAlign: 'left', maxWidth: '400px', margin: '0 auto' }}>
+          {hasProperties ? (
+            <div>
+              <p style={{ marginBottom: '12px' }}>You have {userProperties.length} properties, but none are available for lease:</p>
+              <ul style={{ listStyle: 'none', padding: '0' }}>
+                {propertiesOnAuction > 0 && (
+                  <li style={{ marginBottom: '8px' }}>🚨 {propertiesOnAuction} on auction (cannot lease during auction)</li>
+                )}
+                {propertiesForSale > 0 && (
+                  <li style={{ marginBottom: '8px' }}>💰 {propertiesForSale} for sale (cannot lease while selling)</li>
+                )}
+                {unapprovedProperties > 0 && (
+                  <li style={{ marginBottom: '8px' }}>⏳ {unapprovedProperties} pending approval</li>
+                )}
+              </ul>
+            </div>
+          ) : (
+            <p>You need to have approved properties before creating leases.</p>
+          )}
+        </div>
       </div>
     );
   }

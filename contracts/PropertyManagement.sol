@@ -196,6 +196,7 @@ contract PropertyManagement is ReentrancyGuard {
     ) external onlyPropertyOwner(_propertyId) onlyApprovedProperty(_propertyId) returns (uint256) {
         require(properties[_propertyId].isActive, "Property is not active");
         require(!properties[_propertyId].isForSale, "Property is currently for sale"); //Cannot lease property that's for sale
+        require(!properties[_propertyId].onAuction, "Property is currently on auction"); //Cannot lease property that's being auctioned
         require(_tenant != address(0), "Invalid tenant address");
         require(_startDate < _endDate, "Invalid lease duration");
         
