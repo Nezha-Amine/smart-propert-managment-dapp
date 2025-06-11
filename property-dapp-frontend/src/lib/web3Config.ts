@@ -30,7 +30,7 @@ export const config = createConfig({
 });
 
 // Contract configuration
-export const CONTRACT_ADDRESS = '0x3Aa5ebB10DC797CAC828524e59A333d0A371443c';
+export const CONTRACT_ADDRESS = '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
 
 export const CONTRACT_ABI = [
   {
@@ -331,6 +331,33 @@ export const CONTRACT_ABI = [
       { "internalType": "uint256[]", "name": "transferDates", "type": "uint256[]" },
       { "internalType": "uint256[]", "name": "salePrices", "type": "uint256[]" }
     ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "_user", "type": "address" }],
+    "name": "getUserAuctionHistory",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "uint256", "name": "propertyId", "type": "uint256" },
+          { "internalType": "uint256", "name": "bidAmount", "type": "uint256" },
+          { "internalType": "uint256", "name": "timestamp", "type": "uint256" },
+          { "internalType": "string", "name": "status", "type": "string" },
+          { "internalType": "bool", "name": "withdrawn", "type": "bool" }
+        ],
+        "internalType": "struct PropertyManagement.UserBid[]",
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "_user", "type": "address" }],
+    "name": "getUserAuctionHistoryCount",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },

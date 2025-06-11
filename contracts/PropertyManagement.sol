@@ -84,6 +84,15 @@ contract PropertyManagement is ReentrancyGuard {
         uint256 timestamp;
     }
     
+    // Struct to store user bid history
+    struct UserBid {
+        uint256 propertyId;
+        uint256 bidAmount;
+        uint256 timestamp;
+        string status; // "ACTIVE", "OUTBID", "WON", "CANCELLED"
+        bool withdrawn;
+    }
+    
     // Counters for generating IDs
     uint256 private propertyCounter;
     uint256 private leaseCounter;
@@ -104,6 +113,8 @@ contract PropertyManagement is ReentrancyGuard {
     mapping(uint256 => uint256[]) public propertyAuctionHistory; // NEW: Record auction-based transfers
     mapping(uint256 => Auction) public auctions; // propertyId => Auction
     mapping(uint256 => mapping(address => uint256)) public pendingReturns; // propertyId => (bidder => amount)
+    mapping(address => UserBid[]) public userBidHistory; // user => their bid history
+    mapping(uint256 => address[]) public auctionParticipants; // propertyId => list of bidders
    
     // Notary related state variables
     address public notary;
@@ -414,13 +425,12 @@ contract PropertyManagement is ReentrancyGuard {
         require(properties[_propertyId].isActive, "Property is not active");
         require(_price > 0, "Sale price must be greater than zero");
         
-        // Check if the property has any active leases
+        // Check if the property has any active leases - prevent sale if there are active leases
         uint256[] memory landlordLeaseList = landlordLeases[msg.sender];
         for (uint i = 0; i < landlordLeaseList.length; i++) {
             LeaseAgreement memory lease = leaseAgreements[landlordLeaseList[i]];
             if (lease.propertyId == _propertyId && lease.isActive) {
-                // End the lease before selling
-                leaseAgreements[landlordLeaseList[i]].isActive = false;
+                revert("Cannot list property for sale with active lease");
             }
         }
         
@@ -601,6 +611,15 @@ contract PropertyManagement is ReentrancyGuard {
         require(_startingPrice > 0, "Starting price must be greater than 0");
         require(_durationInSeconds >= 1 hours, "Auction duration must be at least 1 hour");
         require(_durationInSeconds <= 30 days, "Auction duration cannot exceed 30 days");
+        
+        // Check if property has any active leases
+        uint256[] memory landlordLeaseList = landlordLeases[msg.sender];
+        for (uint i = 0; i < landlordLeaseList.length; i++) {
+            LeaseAgreement memory lease = leaseAgreements[landlordLeaseList[i]];
+            if (lease.propertyId == _propertyId && lease.isActive) {
+                revert("Cannot auction property with active lease");
+            }
+        }
 
         property.onAuction = true;
         property.auctionEndTime = block.timestamp + _durationInSeconds;
@@ -629,9 +648,19 @@ contract PropertyManagement is ReentrancyGuard {
         require(msg.value > property.highestBid, "Bid must be higher than current highest bid");
         require(msg.sender != property.owner, "Owner cannot bid on their own property");
 
-        // If there was a previous bid, add it to pending returns
+        // Update previous highest bidder's status to "OUTBID"
         if (property.highestBidder != address(0)) {
             pendingReturns[_propertyId][property.highestBidder] += property.highestBid;
+            
+            // Update previous bidder's last bid status to "OUTBID"
+            UserBid[] storage previousBidderHistory = userBidHistory[property.highestBidder];
+            for (uint256 i = previousBidderHistory.length; i > 0; i--) {
+                if (previousBidderHistory[i-1].propertyId == _propertyId && 
+                    keccak256(bytes(previousBidderHistory[i-1].status)) == keccak256(bytes("ACTIVE"))) {
+                    previousBidderHistory[i-1].status = "OUTBID";
+                    break;
+                }
+            }
         }
 
         property.highestBidder = msg.sender;
@@ -641,6 +670,28 @@ contract PropertyManagement is ReentrancyGuard {
         Auction storage auction = auctions[_propertyId];
         auction.highestBidder = msg.sender;
         auction.highestBid = msg.value;
+
+        // Add user to auction participants if not already there
+        address[] storage participants = auctionParticipants[_propertyId];
+        bool isNewParticipant = true;
+        for (uint256 i = 0; i < participants.length; i++) {
+            if (participants[i] == msg.sender) {
+                isNewParticipant = false;
+                break;
+            }
+        }
+        if (isNewParticipant) {
+            participants.push(msg.sender);
+        }
+
+        // Record the bid in user's history
+        userBidHistory[msg.sender].push(UserBid({
+            propertyId: _propertyId,
+            bidAmount: msg.value,
+            timestamp: block.timestamp,
+            status: "ACTIVE",
+            withdrawn: false
+        }));
 
         emit BidPlaced(_propertyId, msg.sender, msg.value);
     }
@@ -677,6 +728,16 @@ contract PropertyManagement is ReentrancyGuard {
         auction.ended = true;
 
         if (property.highestBidder != address(0)) {
+            // Update winner's bid status to "WON"
+            UserBid[] storage winnerHistory = userBidHistory[property.highestBidder];
+            for (uint256 i = winnerHistory.length; i > 0; i--) {
+                if (winnerHistory[i-1].propertyId == _propertyId && 
+                    keccak256(bytes(winnerHistory[i-1].status)) == keccak256(bytes("ACTIVE"))) {
+                    winnerHistory[i-1].status = "WON";
+                    break;
+                }
+            }
+
             // Transfer ownership
             address previousOwner = property.owner;
             property.owner = property.highestBidder;
@@ -731,6 +792,19 @@ contract PropertyManagement is ReentrancyGuard {
         property.onAuction = false;
         auction.ended = true;
         
+        // Update all participants' bid statuses to "CANCELLED"
+        address[] storage participants = auctionParticipants[_propertyId];
+        for (uint256 j = 0; j < participants.length; j++) {
+            UserBid[] storage participantHistory = userBidHistory[participants[j]];
+            for (uint256 i = participantHistory.length; i > 0; i--) {
+                if (participantHistory[i-1].propertyId == _propertyId && 
+                    (keccak256(bytes(participantHistory[i-1].status)) == keccak256(bytes("ACTIVE")) ||
+                     keccak256(bytes(participantHistory[i-1].status)) == keccak256(bytes("OUTBID")))) {
+                    participantHistory[i-1].status = "CANCELLED";
+                }
+            }
+        }
+        
         uint256 totalRefunded = 0;
         
         // Refund the highest bidder if there is one
@@ -778,6 +852,16 @@ contract PropertyManagement is ReentrancyGuard {
     // View function to get pending returns for a bidder
     function getPendingReturn(uint256 _propertyId, address _bidder) external view returns (uint256) {
         return pendingReturns[_propertyId][_bidder];
+    }
+
+    // Function to get user's auction history
+    function getUserAuctionHistory(address _user) external view returns (UserBid[] memory) {
+        return userBidHistory[_user];
+    }
+
+    // Function to get user's auction history count
+    function getUserAuctionHistoryCount(address _user) external view returns (uint256) {
+        return userBidHistory[_user].length;
     }
 
     // Function to get a range of properties

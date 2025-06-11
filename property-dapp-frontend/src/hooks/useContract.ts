@@ -101,11 +101,37 @@ export function useContract() {
     }
   };
 
+  const getLandlordLeases = useCallback(async (landlordAddress: string) => {
+    try {
+      const provider = new ethers.providers.Web3Provider(window.ethereum as any);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+      const leaseIds = await contract.getLandlordLeases(landlordAddress);
+      return leaseIds.map((id: any) => Number(id));
+    } catch (error) {
+      console.error('Error getting landlord leases:', error);
+      throw error;
+    }
+  }, []);
+
+  const getLeaseById = useCallback(async (leaseId: number) => {
+    try {
+      const provider = new ethers.providers.Web3Provider(window.ethereum as any);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+      const lease = await contract.getLeaseById(leaseId);
+      return lease;
+    } catch (error) {
+      console.error('Error getting lease:', error);
+      throw error;
+    }
+  }, []);
+
   return {
     propertyCount: propertyCount ? Number(propertyCount) : 0,
     getPropertyById,
     startAuction,
     placeBid,
     endAuction,
+    getLandlordLeases,
+    getLeaseById,
   };
 } 

@@ -23,8 +23,29 @@ interface Property {
 export default function AuctionsPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
-  const { propertyCount, getPropertyById } = useContract();
+  const [propertiesWithActiveLeases, setPropertiesWithActiveLeases] = useState<Set<number>>(new Set());
+  const { propertyCount, getPropertyById, getLandlordLeases, getLeaseById } = useContract();
   const { address } = useAccount();
+
+  const checkActiveLeases = async () => {
+    if (!address) return;
+    
+    try {
+      const leaseIds = await getLandlordLeases(address);
+      const propertiesWithLeases = new Set<number>();
+      
+      for (const leaseId of leaseIds) {
+        const lease = await getLeaseById(leaseId);
+        if (lease && lease.isActive) {
+          propertiesWithLeases.add(Number(lease.propertyId));
+        }
+      }
+      
+      setPropertiesWithActiveLeases(propertiesWithLeases);
+    } catch (error) {
+      console.error('Error checking active leases:', error);
+    }
+  };
 
   const fetchProperties = async () => {
     try {
@@ -49,6 +70,7 @@ export default function AuctionsPage() {
       }
 
       setProperties(propertiesData);
+      await checkActiveLeases();
     } catch (error) {
       console.error('Error fetching properties:', error);
       toast.error('Failed to load properties. Please try again.');
@@ -76,8 +98,12 @@ export default function AuctionsPage() {
     );
   }
 
-  const userApprovedProperties = properties.filter(
-    (property) => property.owner === address && property.isApproved && !property.onAuction
+  const userProperties = properties.filter(
+    (property) => property.owner === address && property.isApproved
+  );
+
+  const userApprovedProperties = userProperties.filter(
+    (property) => !property.onAuction && !propertiesWithActiveLeases.has(property.id)
   );
 
   return (
@@ -90,7 +116,19 @@ export default function AuctionsPage() {
         </div>
       ) : userApprovedProperties.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '32px 0' }}>
-          <p style={{ fontSize: '18px', marginBottom: '16px', color: '#6b7280' }}>You don't have any approved properties to auction</p>
+          <p style={{ fontSize: '18px', marginBottom: '16px', color: '#6b7280' }}>
+            You don't have any approved properties available for auction
+          </p>
+          <div style={{ marginBottom: '24px', padding: '16px', backgroundColor: '#f3f4f6', borderRadius: '8px', textAlign: 'left' }}>
+            <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px' }}>
+              <strong>Properties are not available for auction if they:</strong>
+            </p>
+            <ul style={{ fontSize: '14px', color: '#6b7280', paddingLeft: '20px' }}>
+              <li>Are not yet approved by the notary</li>
+              <li>Are already on auction</li>
+              <li>Have active lease agreements</li>
+            </ul>
+          </div>
           <Button
             onClick={() => window.location.href = '/properties'}
             style={{ 

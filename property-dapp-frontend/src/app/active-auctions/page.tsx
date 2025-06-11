@@ -30,6 +30,14 @@ interface BidEvent {
   blockNumber: number;
 }
 
+interface UserBid {
+  propertyId: bigint;
+  bidAmount: bigint;
+  timestamp: bigint;
+  status: string;
+  withdrawn: boolean;
+}
+
 export default function ActiveAuctionsPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [myProperties, setMyProperties] = useState<Property[]>([]);
@@ -39,7 +47,9 @@ export default function ActiveAuctionsPage() {
   const [bidHistory, setBidHistory] = useState<{ [key: number]: BidEvent[] }>({});
   const [pendingReturns, setPendingReturns] = useState<{ [key: number]: bigint }>({});
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [activeTab, setActiveTab] = useState<'browse' | 'manage'>('browse');
+  const [activeTab, setActiveTab] = useState<'browse' | 'manage' | 'history'>('browse');
+  const [auctionHistory, setAuctionHistory] = useState<UserBid[]>([]);
+  const [historyProperties, setHistoryProperties] = useState<{ [key: string]: Property }>({});
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [detailsPropertyId, setDetailsPropertyId] = useState<number>(0);
   const { address } = useAccount();
@@ -184,6 +194,45 @@ export default function ActiveAuctionsPage() {
       setPendingReturns(returns);
     } catch (error) {
       console.error('Error fetching pending returns:', error);
+    }
+  };
+
+  // Fetch user auction history
+  const fetchAuctionHistory = async () => {
+    if (!address) return;
+
+    try {
+      // Fetch user's auction history
+      const history = await readContract({
+        address: CONTRACT_ADDRESS as `0x${string}`,
+        abi: CONTRACT_ABI,
+        functionName: 'getUserAuctionHistory',
+        args: [address as `0x${string}`],
+      }) as UserBid[];
+
+      setAuctionHistory(history);
+
+      // Fetch property details for each bid
+      const propertyIds = [...new Set(history.map(bid => bid.propertyId.toString()))];
+      const propertyData: { [key: string]: Property } = {};
+
+      for (const propertyId of propertyIds) {
+        try {
+          const property = await readContract({
+            address: CONTRACT_ADDRESS as `0x${string}`,
+            abi: CONTRACT_ABI,
+            functionName: 'properties',
+            args: [BigInt(propertyId)],
+          }) as Property;
+          propertyData[propertyId] = property;
+        } catch (error) {
+          console.error(`Failed to fetch property ${propertyId}:`, error);
+        }
+      }
+
+      setHistoryProperties(propertyData);
+    } catch (error) {
+      console.error('Failed to fetch auction history:', error);
     }
   };
 
@@ -372,17 +421,25 @@ export default function ActiveAuctionsPage() {
 
   useEffect(() => {
     fetchProperties();
+    if (address) {
+      fetchAuctionHistory();
+    }
     
     // Auto refresh every 15 seconds if enabled
     let interval: NodeJS.Timeout;
     if (autoRefresh) {
-      interval = setInterval(fetchProperties, 15000);
+      interval = setInterval(() => {
+        fetchProperties();
+        if (activeTab === 'history' && address) {
+          fetchAuctionHistory();
+        }
+      }, 15000);
     }
     
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [propertyCounter, autoRefresh, address]);
+  }, [propertyCounter, autoRefresh, address, activeTab]);
 
   const isAuctionExpired = (endTime: number) => {
     return Date.now() / 1000 >= endTime;
@@ -566,7 +623,8 @@ export default function ActiveAuctionsPage() {
     withdrawBid?.();
   };
 
-  const formatAddress = (address: string) => {
+  const formatAddress = (address: string | undefined) => {
+    if (!address) return 'Unknown';
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
@@ -1072,7 +1130,7 @@ export default function ActiveAuctionsPage() {
           <div style={{ marginBottom: '32px' }}>
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: '1fr 1fr', 
+              gridTemplateColumns: '1fr 1fr 1fr', 
               background: '#f1f5f9',
               borderRadius: '12px',
               padding: '4px',
@@ -1114,6 +1172,24 @@ export default function ActiveAuctionsPage() {
               >
                 My Auctions ({myProperties.length})
               </button>
+              <button
+                onClick={() => setActiveTab('history')}
+                style={{
+                  padding: '12px 24px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: activeTab === 'history' 
+                    ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
+                    : 'transparent',
+                  color: activeTab === 'history' ? 'white' : '#64748b',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                Auction History ({auctionHistory.length})
+              </button>
             </div>
           </div>
 
@@ -1138,7 +1214,7 @@ export default function ActiveAuctionsPage() {
                 {properties.map((property) => renderPropertyCard(property, false))}
               </div>
             )
-          ) : (
+          ) : activeTab === 'manage' ? (
             myProperties.length === 0 ? (
               <div style={{
                 background: 'linear-gradient(135deg, #e0f2fe 0%, #03a9f4 100%)',
@@ -1172,6 +1248,291 @@ export default function ActiveAuctionsPage() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
                 {myProperties.map((property) => renderPropertyCard(property, true))}
+              </div>
+            )
+          ) : (
+            // Auction History Tab
+            (auctionHistory.length === 0 && myProperties.length === 0) ? (
+              <div style={{
+                background: 'linear-gradient(135deg, #f3e8ff 0%, #c084fc 100%)',
+                borderRadius: '20px',
+                padding: '48px',
+                textAlign: 'center',
+                color: '#6b21a8'
+              }}>
+                <div style={{ fontSize: '64px', marginBottom: '16px' }}>📊</div>
+                <h2 style={{ fontSize: '24px', marginBottom: '8px', fontWeight: '600' }}>No Auction History</h2>
+                <p style={{ fontSize: '16px', opacity: '0.8' }}>
+                  You haven't participated in any property auctions yet. Start bidding or listing properties to see your history here!
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+                {/* Bids I Made */}
+                {auctionHistory.length > 0 && (
+                  <div>
+                    <h3 style={{ fontSize: '20px', fontWeight: '600', color: '#1f2937', marginBottom: '16px' }}>
+                      📈 My Bids History
+                    </h3>
+                    <div style={{
+                      background: 'white',
+                      borderRadius: '12px',
+                      overflow: 'hidden',
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                      border: '1px solid #e5e7eb'
+                    }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
+                            <th style={{ padding: '16px', textAlign: 'left', fontSize: '14px', fontWeight: '600' }}>PROPERTY</th>
+                            <th style={{ padding: '16px', textAlign: 'left', fontSize: '14px', fontWeight: '600' }}>MY BID</th>
+                            <th style={{ padding: '16px', textAlign: 'left', fontSize: '14px', fontWeight: '600' }}>STATUS</th>
+                            <th style={{ padding: '16px', textAlign: 'left', fontSize: '14px', fontWeight: '600' }}>DATE</th>
+                            <th style={{ padding: '16px', textAlign: 'center', fontSize: '14px', fontWeight: '600' }}>ACTIONS</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {auctionHistory.map((bid, index) => {
+                            const property = historyProperties[bid.propertyId.toString()];
+                            const getStatusColor = (status: string) => {
+                              switch (status) {
+                                case 'WON': return '#10b981';
+                                case 'ACTIVE': return '#3b82f6';
+                                case 'OUTBID': return '#f59e0b';
+                                case 'CANCELLED': return '#ef4444';
+                                default: return '#6b7280';
+                              }
+                            };
+
+                            const getStatusIcon = (status: string) => {
+                              switch (status) {
+                                case 'WON': return '🏆';
+                                case 'ACTIVE': return '🔥';
+                                case 'OUTBID': return '⚠️';
+                                case 'CANCELLED': return '❌';
+                                default: return '❓';
+                              }
+                            };
+
+                            return (
+                              <tr 
+                                key={index}
+                                style={{
+                                  borderBottom: index < auctionHistory.length - 1 ? '1px solid #f3f4f6' : 'none',
+                                  background: index % 2 === 0 ? '#f9fafb' : 'white'
+                                }}
+                              >
+                                <td style={{ padding: '16px' }}>
+                                  <div>
+                                    <p style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937', margin: '0 0 4px 0' }}>
+                                      Property #{bid.propertyId.toString()}
+                                    </p>
+                                    {property ? (
+                                      <div>
+                                        <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 2px 0' }}>
+                                          📍 {property.propertyAddress}
+                                        </p>
+                                        <p style={{ fontSize: '12px', color: '#6b7280', margin: '0' }}>
+                                          📐 {property.size} m² • 🏢 {property.propertyType}
+                                        </p>
+                                      </div>
+                                    ) : (
+                                      <p style={{ fontSize: '12px', color: '#6b7280', fontStyle: 'italic', margin: '0' }}>
+                                        Loading details...
+                                      </p>
+                                    )}
+                                  </div>
+                                </td>
+                                <td style={{ padding: '16px' }}>
+                                  <p style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937', margin: '0' }}>
+                                    {formatEther(bid.bidAmount)} ETH
+                                  </p>
+                                </td>
+                                <td style={{ padding: '16px' }}>
+                                  <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '6px 12px',
+                                    borderRadius: '20px',
+                                    fontSize: '12px',
+                                    fontWeight: '600',
+                                    color: 'white',
+                                    background: getStatusColor(bid.status)
+                                  }}>
+                                    {getStatusIcon(bid.status)} {bid.status}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '16px' }}>
+                                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0' }}>
+                                    {new Date(Number(bid.timestamp) * 1000).toLocaleDateString('en-US', {
+                                      year: 'numeric',
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </p>
+                                </td>
+                                <td style={{ padding: '16px', textAlign: 'center' }}>
+                                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                                    <button
+                                      onClick={() => {
+                                        setDetailsPropertyId(Number(bid.propertyId));
+                                        setDetailsModalOpen(true);
+                                      }}
+                                      style={{
+                                        padding: '6px 12px',
+                                        borderRadius: '6px',
+                                        border: '1px solid #d1d5db',
+                                        background: 'white',
+                                        color: '#374151',
+                                        fontSize: '12px',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease'
+                                      }}
+                                    >
+                                      ℹ️ Details
+                                    </button>
+                                    
+                                    {bid.status === 'OUTBID' && pendingReturns[Number(bid.propertyId)] && pendingReturns[Number(bid.propertyId)] > 0n && (
+                                      <button
+                                        onClick={() => handleWithdrawBid(Number(bid.propertyId))}
+                                        disabled={isWithdrawingBid}
+                                        style={{
+                                          padding: '6px 12px',
+                                          borderRadius: '6px',
+                                          border: 'none',
+                                          background: '#f59e0b',
+                                          color: 'white',
+                                          fontSize: '12px',
+                                          cursor: isWithdrawingBid ? 'not-allowed' : 'pointer',
+                                          opacity: isWithdrawingBid ? 0.6 : 1,
+                                          transition: 'all 0.2s ease'
+                                        }}
+                                      >
+                                        💰 Withdraw
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Auctions I Started */}
+                {myProperties.filter(p => p.auctionEnded || !p.onAuction).length > 0 && (
+                  <div>
+                    <h3 style={{ fontSize: '20px', fontWeight: '600', color: '#1f2937', marginBottom: '16px' }}>
+                      🏛️ My Auction History (Properties I Listed)
+                    </h3>
+                    <div style={{
+                      background: 'white',
+                      borderRadius: '12px',
+                      overflow: 'hidden',
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                      border: '1px solid #e5e7eb'
+                    }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white' }}>
+                            <th style={{ padding: '16px', textAlign: 'left', fontSize: '14px', fontWeight: '600' }}>PROPERTY</th>
+                            <th style={{ padding: '16px', textAlign: 'left', fontSize: '14px', fontWeight: '600' }}>FINAL BID</th>
+                            <th style={{ padding: '16px', textAlign: 'left', fontSize: '14px', fontWeight: '600' }}>WINNER</th>
+                            <th style={{ padding: '16px', textAlign: 'left', fontSize: '14px', fontWeight: '600' }}>STATUS</th>
+                            <th style={{ padding: '16px', textAlign: 'center', fontSize: '14px', fontWeight: '600' }}>ACTIONS</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {myProperties.filter(p => p.auctionEnded || !p.onAuction).map((property, index) => (
+                            <tr 
+                              key={property.id}
+                              style={{
+                                borderBottom: index < myProperties.filter(p => p.auctionEnded || !p.onAuction).length - 1 ? '1px solid #f3f4f6' : 'none',
+                                background: index % 2 === 0 ? '#f9fafb' : 'white'
+                              }}
+                            >
+                              <td style={{ padding: '16px' }}>
+                                <div>
+                                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#1f2937', margin: '0 0 4px 0' }}>
+                                    Property #{property.id}
+                                  </p>
+                                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 2px 0' }}>
+                                    📍 {property.propertyAddress}
+                                  </p>
+                                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0' }}>
+                                    📐 {property.size} m² • 🏢 {property.propertyType}
+                                  </p>
+                                </div>
+                              </td>
+                              <td style={{ padding: '16px' }}>
+                                <p style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937', margin: '0' }}>
+                                  {property.highestBid > 0n ? `${formatEther(property.highestBid)} ETH` : 'No bids'}
+                                </p>
+                              </td>
+                              <td style={{ padding: '16px' }}>
+                                {property.highestBidder && property.highestBidder !== '0x0000000000000000000000000000000000000000' ? (
+                                  <p style={{ fontSize: '12px', color: '#1f2937', margin: '0', fontFamily: 'monospace' }}>
+                                    {formatAddress(property.highestBidder)}
+                                  </p>
+                                ) : (
+                                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0', fontStyle: 'italic' }}>
+                                    No winner
+                                  </p>
+                                )}
+                              </td>
+                              <td style={{ padding: '16px' }}>
+                                <span style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  padding: '6px 12px',
+                                  borderRadius: '20px',
+                                  fontSize: '12px',
+                                  fontWeight: '600',
+                                  color: 'white',
+                                  background: property.auctionEnded 
+                                    ? (property.highestBidder && property.highestBidder !== '0x0000000000000000000000000000000000000000' ? '#10b981' : '#6b7280')
+                                    : '#3b82f6'
+                                }}>
+                                  {property.auctionEnded 
+                                    ? (property.highestBidder && property.highestBidder !== '0x0000000000000000000000000000000000000000' ? '✅ SOLD' : '❌ NO SALE')
+                                    : '🔥 ACTIVE'
+                                  }
+                                </span>
+                              </td>
+                              <td style={{ padding: '16px', textAlign: 'center' }}>
+                                <button
+                                  onClick={() => {
+                                    setDetailsPropertyId(property.id);
+                                    setDetailsModalOpen(true);
+                                  }}
+                                  style={{
+                                    padding: '6px 12px',
+                                    borderRadius: '6px',
+                                    border: '1px solid #d1d5db',
+                                    background: 'white',
+                                    color: '#374151',
+                                    fontSize: '12px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease'
+                                  }}
+                                >
+                                  ℹ️ Details
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             )
           )}
