@@ -6,6 +6,7 @@ import { readContract } from 'wagmi/actions';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '@/lib/web3Config';
 import { formatEther, parseEther } from 'viem';
 import { toast } from 'sonner';
+import PropertyDetailsModal from '@/components/properties/PropertyDetailsModal';
 
 interface Property {
   id: number;
@@ -39,6 +40,8 @@ export default function ActiveAuctionsPage() {
   const [pendingReturns, setPendingReturns] = useState<{ [key: number]: bigint }>({});
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [activeTab, setActiveTab] = useState<'browse' | 'manage'>('browse');
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [detailsPropertyId, setDetailsPropertyId] = useState<number>(0);
   const { address } = useAccount();
 
   // Get property counter
@@ -585,10 +588,43 @@ export default function ActiveAuctionsPage() {
         color: 'white'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-          <div>
-            <h3 style={{ fontSize: '20px', fontWeight: '600', margin: '0 0 8px 0' }}>
-              🏠 {property.propertyAddress}
-            </h3>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+              <h3 style={{ fontSize: '20px', fontWeight: '600', margin: 0 }}>
+                🏠 {property.propertyAddress}
+              </h3>
+              <button
+                onClick={() => {
+                  setDetailsPropertyId(property.id);
+                  setDetailsModalOpen(true);
+                }}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  color: 'white',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = 'rgba(255, 255, 255, 0.3)';
+                  e.target.style.transform = 'scale(1.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = 'rgba(255, 255, 255, 0.2)';
+                  e.target.style.transform = 'scale(1)';
+                }}
+                title="View property details and history"
+              >
+                ℹ️
+              </button>
+            </div>
             <div style={{ display: 'flex', gap: '16px', fontSize: '14px', opacity: '0.9' }}>
               <span>📐 {property.size} m²</span>
               <span>🏢 {property.propertyType}</span>
@@ -1141,6 +1177,13 @@ export default function ActiveAuctionsPage() {
           )}
         </>
       )}
+      
+      {/* Property Details Modal */}
+      <PropertyDetailsModal
+        propertyId={detailsPropertyId}
+        isOpen={detailsModalOpen}
+        onClose={() => setDetailsModalOpen(false)}
+      />
     </div>
   );
 } 

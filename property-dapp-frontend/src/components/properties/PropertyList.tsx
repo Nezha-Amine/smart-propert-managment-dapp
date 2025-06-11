@@ -9,6 +9,7 @@ import { CONTRACT_ADDRESS, CONTRACT_ABI } from '@/lib/web3Config';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import PropertyDetailsModal from './PropertyDetailsModal';
 
 interface Property {
   id: number;
@@ -35,6 +36,8 @@ export function PropertyList() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [isNotary, setIsNotary] = useState(false);
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [selectedPropertyId, setSelectedPropertyId] = useState<number>(0);
 
   // Check if current user is notary
   const { data: notaryAddress } = useContractRead({
@@ -292,6 +295,7 @@ export function PropertyList() {
               <TableHead style={{ color: '#374151', fontWeight: '700' }}>Type</TableHead>
               <TableHead style={{ color: '#374151', fontWeight: '700' }}>Size</TableHead>
               <TableHead style={{ color: '#374151', fontWeight: '700' }}>Status</TableHead>
+              <TableHead style={{ color: '#374151', fontWeight: '700' }}>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -335,6 +339,36 @@ export function PropertyList() {
                 <TableCell>
                   {getStatusBadge(property)}
                 </TableCell>
+                <TableCell>
+                  <Button
+                    onClick={() => {
+                      setSelectedPropertyId(property.id);
+                      setDetailsModalOpen(true);
+                    }}
+                    variant="outline"
+                    size="sm"
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '12px',
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.transform = 'scale(1.05)';
+                      e.target.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.transform = 'scale(1)';
+                      e.target.style.boxShadow = 'none';
+                    }}
+                  >
+                    ℹ️ Details
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -355,6 +389,13 @@ export function PropertyList() {
           </p>
         </div>
       </CardContent>
+      
+      {/* Property Details Modal */}
+      <PropertyDetailsModal
+        propertyId={selectedPropertyId}
+        isOpen={detailsModalOpen}
+        onClose={() => setDetailsModalOpen(false)}
+      />
     </Card>
   );
 }

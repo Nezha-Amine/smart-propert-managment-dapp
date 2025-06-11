@@ -30,7 +30,7 @@ export const config = createConfig({
 });
 
 // Contract configuration
-export const CONTRACT_ADDRESS = '0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9';
+export const CONTRACT_ADDRESS = '0x3Aa5ebB10DC797CAC828524e59A333d0A371443c';
 
 export const CONTRACT_ABI = [
   {
@@ -293,6 +293,43 @@ export const CONTRACT_ABI = [
       { "internalType": "uint256", "name": "createdAt", "type": "uint256" },
       { "internalType": "uint256", "name": "previousLeaseId", "type": "uint256" },
       { "internalType": "bool", "name": "isRenewal", "type": "bool" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // HISTORY FUNCTIONS
+  {
+    "inputs": [{ "internalType": "uint256", "name": "_propertyId", "type": "uint256" }],
+    "name": "getPropertyLeases",
+    "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "_leaseId", "type": "uint256" }],
+    "name": "getLeaseDetails",
+    "outputs": [
+      { "internalType": "uint256", "name": "propertyId", "type": "uint256" },
+      { "internalType": "address", "name": "landlord", "type": "address" },
+      { "internalType": "address", "name": "tenant", "type": "address" },
+      { "internalType": "uint256", "name": "monthlyRent", "type": "uint256" },
+      { "internalType": "uint256", "name": "securityDeposit", "type": "uint256" },
+      { "internalType": "uint256", "name": "startDate", "type": "uint256" },
+      { "internalType": "uint256", "name": "endDate", "type": "uint256" },
+      { "internalType": "bool", "name": "isActive", "type": "bool" },
+      { "internalType": "uint256", "name": "createdAt", "type": "uint256" },
+      { "internalType": "bool", "name": "isRenewal", "type": "bool" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "_propertyId", "type": "uint256" }],
+    "name": "getPropertyOwnershipHistory",
+    "outputs": [
+      { "internalType": "address[]", "name": "owners", "type": "address[]" },
+      { "internalType": "uint256[]", "name": "transferDates", "type": "uint256[]" },
+      { "internalType": "uint256[]", "name": "salePrices", "type": "uint256[]" }
     ],
     "stateMutability": "view",
     "type": "function"

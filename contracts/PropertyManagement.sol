@@ -74,11 +74,22 @@ contract PropertyManagement is ReentrancyGuard {
         bool exists;
     }
     
+    // Struct to store auction transfer details
+    struct AuctionTransfer {
+        uint256 id;
+        uint256 propertyId;
+        address previousOwner;
+        address newOwner;
+        uint256 transferPrice;
+        uint256 timestamp;
+    }
+    
     // Counters for generating IDs
     uint256 private propertyCounter;
     uint256 private leaseCounter;
     uint256 private transactionCounter;
     uint256 private saleCounter; //Counter for property sales
+    uint256 private auctionTransferCounter; //Counter for auction transfers
     // Mappings to store data
     mapping(uint256 => Property) public properties;
     mapping(address => uint256[]) public ownerProperties;
@@ -89,6 +100,8 @@ contract PropertyManagement is ReentrancyGuard {
     mapping(uint256 => uint256) public renewedLeases; // Maps old lease ID to new lease ID
     mapping(uint256 => PropertySale) public propertySales; // NEW: Map property sales by ID
     mapping(uint256 => uint256[]) public propertyTransferHistory; // NEW: Record property ownership transfers
+    mapping(uint256 => AuctionTransfer) public auctionTransfers; // NEW: Map auction transfers by ID
+    mapping(uint256 => uint256[]) public propertyAuctionHistory; // NEW: Record auction-based transfers
     mapping(uint256 => Auction) public auctions; // propertyId => Auction
     mapping(uint256 => mapping(address => uint256)) public pendingReturns; // propertyId => (bidder => amount)
    
@@ -681,6 +694,19 @@ contract PropertyManagement is ReentrancyGuard {
             // Add property to new owner's list
             ownerProperties[property.highestBidder].push(_propertyId);
 
+            // Record auction transfer in history
+            auctionTransferCounter++;
+            AuctionTransfer memory newTransfer = AuctionTransfer({
+                id: auctionTransferCounter,
+                propertyId: _propertyId,
+                previousOwner: previousOwner,
+                newOwner: property.highestBidder,
+                transferPrice: property.highestBid,
+                timestamp: block.timestamp
+            });
+            auctionTransfers[auctionTransferCounter] = newTransfer;
+            propertyAuctionHistory[_propertyId].push(auctionTransferCounter);
+
             // Transfer the highest bid to the previous owner
             (bool success, ) = payable(previousOwner).call{value: property.highestBid}("");
             require(success, "Transfer to previous owner failed");
@@ -828,6 +854,171 @@ contract PropertyManagement is ReentrancyGuard {
         }
         
         return pendingProperties;
+    }
+
+    // Function to get all leases for a specific property
+    function getPropertyLeases(uint256 _propertyId) external view returns (uint256[] memory) {
+        uint256 leaseCount = 0;
+        
+        // Count leases for this property
+        for (uint256 i = 1; i <= leaseCounter; i++) {
+            if (leaseAgreements[i].propertyId == _propertyId) {
+                leaseCount++;
+            }
+        }
+        
+        // Create array of correct size
+        uint256[] memory propertyLeaseIds = new uint256[](leaseCount);
+        uint256 index = 0;
+        
+        // Fill array with lease IDs for this property
+        for (uint256 i = 1; i <= leaseCounter; i++) {
+            if (leaseAgreements[i].propertyId == _propertyId) {
+                propertyLeaseIds[index] = i;
+                index++;
+            }
+        }
+        
+        return propertyLeaseIds;
+    }
+    
+    // Function to get lease details by lease ID (public access for transparency)
+    function getLeaseDetails(uint256 _leaseId) external view returns (
+        uint256 propertyId,
+        address landlord,
+        address tenant,
+        uint256 monthlyRent,
+        uint256 securityDeposit,
+        uint256 startDate,
+        uint256 endDate,
+        bool isActive,
+        uint256 createdAt,
+        bool isRenewal
+    ) {
+        LeaseAgreement memory lease = leaseAgreements[_leaseId];
+        return (
+            lease.propertyId,
+            lease.landlord,
+            lease.tenant,
+            lease.monthlyRent,
+            lease.securityDeposit,
+            lease.startDate,
+            lease.endDate,
+            lease.isActive,
+            lease.createdAt,
+            lease.isRenewal
+        );
+    }
+    
+    // Function to get property ownership history through sale and auction records
+    function getPropertyOwnershipHistory(uint256 _propertyId) external view returns (
+        address[] memory owners,
+        uint256[] memory transferDates,
+        uint256[] memory salePrices
+    ) {
+        uint256[] memory saleIds = propertyTransferHistory[_propertyId];
+        uint256[] memory auctionIds = propertyAuctionHistory[_propertyId];
+        uint256 totalTransfers = saleIds.length + auctionIds.length;
+        
+        if (totalTransfers == 0) {
+            // Property has never been transferred, only original owner
+            address[] memory ownerHistory = new address[](1);
+            uint256[] memory dates = new uint256[](1);
+            uint256[] memory prices = new uint256[](1);
+            
+            ownerHistory[0] = properties[_propertyId].owner;
+            dates[0] = properties[_propertyId].createdAt;
+            prices[0] = 0; // Original registration, no sale price
+            
+            return (ownerHistory, dates, prices);
+        }
+        
+        // For simple case: current owner + original owner (most common case)
+        if (totalTransfers == 1) {
+            address[] memory ownerHistory = new address[](2);
+            uint256[] memory dates = new uint256[](2);
+            uint256[] memory prices = new uint256[](2);
+            
+            // Current owner (index 0)
+            ownerHistory[0] = properties[_propertyId].owner;
+            
+            // Original owner (index 1)
+            address originalOwner;
+            if (auctionIds.length > 0) {
+                AuctionTransfer memory transfer = auctionTransfers[auctionIds[0]];
+                dates[0] = transfer.timestamp;
+                prices[0] = transfer.transferPrice;
+                originalOwner = transfer.previousOwner;
+            } else if (saleIds.length > 0) {
+                PropertySale memory sale = propertySales[saleIds[0]];
+                dates[0] = sale.timestamp;
+                prices[0] = sale.salePrice;
+                originalOwner = sale.seller;
+            }
+            
+            ownerHistory[1] = originalOwner;
+            dates[1] = properties[_propertyId].createdAt;
+            prices[1] = 0; // Original registration, no sale price
+            
+            return (ownerHistory, dates, prices);
+        }
+        
+        // For complex case with multiple transfers
+        address[] memory ownerHistory = new address[](totalTransfers + 1);
+        uint256[] memory dates = new uint256[](totalTransfers + 1);
+        uint256[] memory prices = new uint256[](totalTransfers + 1);
+        
+        uint256 index = 0;
+        
+        // 1. Current owner
+        ownerHistory[index] = properties[_propertyId].owner;
+        
+        // Get most recent transfer details
+        if (auctionIds.length > 0) {
+            AuctionTransfer memory recentTransfer = auctionTransfers[auctionIds[auctionIds.length - 1]];
+            dates[index] = recentTransfer.timestamp;
+            prices[index] = recentTransfer.transferPrice;
+        } else if (saleIds.length > 0) {
+            PropertySale memory recentSale = propertySales[saleIds[saleIds.length - 1]];
+            dates[index] = recentSale.timestamp;
+            prices[index] = recentSale.salePrice;
+        }
+        index++;
+        
+        // 2. Add all intermediate previous owners
+        // Add auction winners (excluding the most recent one)
+        for (int256 i = int256(auctionIds.length) - 2; i >= 0; i--) {
+            AuctionTransfer memory transfer = auctionTransfers[auctionIds[uint256(i)]];
+            ownerHistory[index] = transfer.newOwner;
+            dates[index] = transfer.timestamp;
+            prices[index] = transfer.transferPrice;
+            index++;
+        }
+        
+        // Add sale buyers (excluding the most recent one)
+        for (int256 i = int256(saleIds.length) - 2; i >= 0; i--) {
+            PropertySale memory sale = propertySales[saleIds[uint256(i)]];
+            ownerHistory[index] = sale.buyer;
+            dates[index] = sale.timestamp;
+            prices[index] = sale.salePrice;
+            index++;
+        }
+        
+        // 3. Original owner (last entry)
+        address originalOwner;
+        if (auctionIds.length > 0) {
+            AuctionTransfer memory firstTransfer = auctionTransfers[auctionIds[0]];
+            originalOwner = firstTransfer.previousOwner;
+        } else if (saleIds.length > 0) {
+            PropertySale memory firstSale = propertySales[saleIds[0]];
+            originalOwner = firstSale.seller;
+        }
+        
+        ownerHistory[index] = originalOwner;
+        dates[index] = properties[_propertyId].createdAt;
+        prices[index] = 0; // Original registration
+        
+        return (ownerHistory, dates, prices);
     }
 
     // Modify existing property-related functions to check for approval
